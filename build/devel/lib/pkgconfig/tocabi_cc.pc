@@ -1,0 +1,8 @@
+prefix=/home/kwan/catkin_ws/src/tocabi_cc/build/devel
+
+Name: tocabi_cc
+Description: Description of tocabi_cc
+Version: 0.0.0
+Cflags: -I/home/kwan/catkin_ws/src/tocabi_cc/include
+Libs: -L${prefix}/lib -ltocabi_cc
+Requires: tocabi_lib tocabi_msgs

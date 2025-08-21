@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: tocabi_cc
+Description: Description of tocabi_cc
+Version: 0.0.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib -ltocabi_cc
+Requires: tocabi_lib tocabi_msgs

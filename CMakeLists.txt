@@ -6,7 +6,7 @@ add_compile_options(-std=c++17 -Ofast)
 find_package(catkin REQUIRED
 roscpp
 tocabi_lib
-tocabi_msgs
+tocabi_msgs  
 eigen_conversions
 )
 
@@ -14,7 +14,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
   CATKIN_DEPENDS tocabi_lib tocabi_msgs
-# DEPENDS system_lib
+  # DEPENDS system_lib
 )
 
 ###########
@@ -28,6 +28,7 @@ include_directories(
 
 add_library(${PROJECT_NAME}
   src/cc.cpp
+  src/mpc.cpp
 )
 add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 

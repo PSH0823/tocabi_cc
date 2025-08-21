@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/kwan/catkin_ws/src/tocabi_cc/build/devel/setup.sh
