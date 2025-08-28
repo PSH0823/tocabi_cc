@@ -1,3 +1,7 @@
+// Must inlude while using Pinocchio in noetic
+// to avoid compilation errors from differing Boost-variant sizes.
+#include <pinocchio/fwd.hpp>
+
 #include "tocabi_lib/robot_data.h"
 #include "wholebody_functions.h"
 #include <std_msgs/String.h>
@@ -13,6 +17,20 @@
 #include <iostream>
 
 #include <mpc.h>
+
+// Pinocchio Headers
+#include <pinocchio/multibody/model.hpp>
+#include <pinocchio/multibody/data.hpp>
+#include <pinocchio/algorithm/kinematics.hpp>
+#include <pinocchio/algorithm/frames.hpp>
+#include <pinocchio/algorithm/jacobian.hpp>
+#include <pinocchio/algorithm/crba.hpp>
+#include <pinocchio/algorithm/rnea.hpp>
+#include <pinocchio/algorithm/rnea-derivatives.hpp>
+#include <pinocchio/algorithm/joint-configuration.hpp>
+#include <pinocchio/algorithm/compute-all-terms.hpp>
+#include <pinocchio/parsers/urdf.hpp>
+
 
 class CustomController
 {
@@ -40,6 +58,7 @@ public:
     // ROBOT 
     RigidBodyDynamics::Model model_d_;  //updated by desired q
     RigidBodyDynamics::Model model_c_;  //updated by current q
+
     void getParameterYAML();
 
     // LOW-LEVEL CONTROL
@@ -150,7 +169,7 @@ public:
     void calculateZMP_wo_offset();
     void computeIkControl(const Eigen::Isometry3d &float_trunk_transform, const Eigen::Isometry3d &float_lleg_transform, const Eigen::Isometry3d &float_rleg_transform, Eigen::Vector12d &q_des);
     void circling_motion();
-
+    
     Eigen::MatrixXd foot_step_;
     Eigen::MatrixXd foot_step_support_frame_;
     Eigen::MatrixXd foot_step_support_frame_offset_;
@@ -389,6 +408,82 @@ public:
 
     double kp_cp = 0.0;
     double zmp_offset_ = 0.0;
+
+    /*******************************************
+     * Pinocchio Related Methods and Variables *
+     *******************************************/
+    
+     /**
+      * @brief Compute the mass matrix of the robot with floating base
+      * 
+      * @param q_virtual_pin the joint configuration of the robot + the virtual joints of the floating base
+      *                      (q[0:2]: base pos., q[3:6]: base ori.quaternion)
+      * @return The mass matrix of the robot(including floating base)
+      */
+    Eigen::MatrixXd pinGetMassMatrix(
+        const Eigen::VectorQVQd &q_virtual_pin
+        );
+    
+    /**
+     * @brief Compute the Jacobian matrix of a given frame of the robot with floating base
+     * 
+     * @param q_virtual_pin the joint configuration of the robot + the virtual joints of the floating base
+     *                      (q[0:2]: base pos., q[3:6]: base ori.quaternion)
+     * @param frame_id the id of TOCABI model in Pinocchio(see enum Pin)
+     * 
+     * @return The Jacobian matrix of the given frame(including floating base)
+     */
+    Eigen::MatrixXd pinGetFrameJacobian(
+        const Eigen::VectorQVQd &q_virtual_pin,
+        const int frame_id
+        );
+    
+    /**
+     * @brief Convert the joint configuration including floating base from RBDL format to Pinocchio format
+     * 
+     * @param q_virtual_rbdl the joint configuration of the robot + the virtual joints of the floating base in RBDL format
+     * 
+     * @return The joint configuration of the robot + the virtual joints of the floating base in Pinocchio format
+     * 
+     * @note q_virtual format of RBDL : [base pos.(x,y,z), base ori. quat(x,y,z), joint pos.(n), base ori. quat(w)]
+     * 
+     *       q_virtual format of Pinocchio : [base pos.(x,y,z), base ori. quat(x,y,z,w), joint pos.(n)]
+     */
+    Eigen::VectorQVQd convertQVirtualRBDLtoPin(
+        const Eigen::VectorQVQd &q_virtual_rbdl
+        );
+
+    /** @brief Variables using Pinocchio library*/
+    // model of the Robot
+    pinocchio::Model pin_model_;
+    // data of the Robot
+    pinocchio::Data pin_data_;
+    pinocchio::Data pin_data_wov;
+    // mass matrix 
+    Eigen::MatrixXd M_pin_;
+    // Jacobian matrix
+    Eigen::MatrixXd J_pin_pelv_;    // pelvis
+    Eigen::MatrixXd J_pin_rfoot_;   // right foot
+    Eigen::MatrixXd J_pin_lfoot_;   // left foot
+    // joint positions(including floating base) of pinocchio
+    Eigen::VectorQVQd q_virtual_pin_;
+    
+    // enum for the frame id of TOCABI model in Pinocchio
+    enum FrameIdxPin
+    { 
+        PELVIS,
+        LEFT_FOOT, 
+        ROGHT_FOOT,
+        LEFT_ELBOW, 
+        LEFT_HAND,
+        HEAD,
+        RIGHT_ELBOW,
+        RIGHT_HAND,
+        FRAME_COUNT // total number of specific frames (used for frame_id_pin_ array sizing)
+    };
+
+    // array to store the frame ids of specific links
+    std::array<int,FRAME_COUNT> frame_id_pin_;
 
 private:
     Eigen::VectorQd ControlVal_;

@@ -6,12 +6,10 @@ using namespace TOCABI;
 //Set the path for data.txt file to your directory.
 //ex. ofstream data1("/home/dyros/ubuntu-20-04/data1.txt");
 //The absolute path to the directory can be check by typing "pwd" command to the terminal.
-ofstream data1("/home/sanghyuk/Desktop/Humanoid_Walking_Control/HW/HW7/data/data1.txt");
-ofstream data2("/home/sanghyuk/Desktop/Humanoid_Walking_Control/HW/HW7/data/data2.txt");
-ofstream data3("/home/sanghyuk/Desktop/Humanoid_Walking_Control/HW/HW7/data/data3.txt");
-// ofstream data4("/home/dyros/ubuntu-20-04/data4.txt");
-// ofstream data5("/home/dyros/ubuntu-20-04/data5.txt");
-// ofstream data6("/home/dyros/ubuntu-20-04/data6.txt");
+ofstream data1("/home/sanghyuk/MATLAB/data/data1.txt");
+ofstream data2("/home/sanghyuk/MATLAB/data/data2.txt");
+ofstream data3("/home/sanghyuk/MATLAB/data/data3.txt");
+ofstream data4("/home/sanghyuk/MATLAB/data/data4.txt");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 CustomController::CustomController(RobotData &rd) : rd_(rd) 
@@ -35,6 +33,27 @@ CustomController::CustomController(RobotData &rd) : rd_(rd)
 
     RigidBodyDynamics::Addons::URDFReadFromFile(desc_package_path.c_str(), &model_d_, true, false);
     RigidBodyDynamics::Addons::URDFReadFromFile(desc_package_path.c_str(), &model_c_, true, false);
+
+    // initialize Pinocchio model and data
+    pinocchio::JointModelFreeFlyer floating_base;
+    pinocchio::urdf::buildModel(desc_package_path, floating_base, pin_model_);
+    pin_data_ = pinocchio::Data(pin_model_);
+    cout << "Model has " << pin_model_.nq << " dof" << pin_model_.nv << endl;
+
+    // store the frame ids of specific links
+    frame_id_pin_[PELVIS] = pin_model_.getFrameId("Pelvis_Link");
+    frame_id_pin_[LEFT_FOOT] = pin_model_.getFrameId("L_Foot_Link");
+    frame_id_pin_[ROGHT_FOOT] = pin_model_.getFrameId("R_Foot_Link");
+    frame_id_pin_[LEFT_ELBOW] = pin_model_.getFrameId("L_Elbow_Link");
+    frame_id_pin_[LEFT_HAND] = pin_model_.getFrameId("L_Wrist2_Link");
+    frame_id_pin_[HEAD] = pin_model_.getFrameId("Head_Link");
+    frame_id_pin_[RIGHT_ELBOW] = pin_model_.getFrameId("R_Elbow_Link");
+    frame_id_pin_[RIGHT_HAND] = pin_model_.getFrameId("R_Wrist2_Link");    
+    // cout << "Frame IDs in Pinocchio model:" << endl;
+    // for (int i = 0; i < FRAME_COUNT; i++) {
+    //     cout << "  " << i << ": " << frame_id_pin_[i] << endl;
+    // }
+
 }
 
 Eigen::VectorQd CustomController::getControl()
@@ -104,9 +123,32 @@ void CustomController::computeSlow()
                 initial_flag = 0;
                 is_mode_7_init = false;
             }
-
+            
             updateInitialState();
             getRobotState();
+            
+            //-------------Compare RBDL and Pinocchio--------------//
+            q_virtual_pin_=convertQVirtualRBDLtoPin(rd_.q_virtual_);
+
+            J_pin_lfoot_ = pinGetFrameJacobian(q_virtual_pin_, frame_id_pin_[LEFT_FOOT]);
+            J_pin_pelv_ = pinGetFrameJacobian(q_virtual_pin_, frame_id_pin_[PELVIS]);
+            M_pin_ = pinGetMassMatrix(q_virtual_pin_);
+
+            if(walking_tick % 500 == 0){
+                data1 << walking_tick/hz_ << endl;
+                data1 << M_pin_ << endl;
+
+                data2 << walking_tick/hz_ << endl;
+                data2 << J_pin_lfoot_ << endl;
+
+                data3 << walking_tick/hz_ << endl;
+                data3 << rd_.A_ << endl;
+                
+                data4 << walking_tick/hz_ << endl;
+                data4 << rd_.link_[Left_Foot].jac << endl;
+            }
+            //----------------------------------------------------//
+
             floatToSupportFootstep();
 
             if(current_step_num_ < total_step_num_)
@@ -2115,7 +2157,7 @@ void CustomController::getComTrajectory_mpc()
     com_desired_(1) = x_com_lin_spline * (y_mpc_(0) - y_mpc_prev(0)) + y_mpc_prev(0);
     com_desired_(2) = com_height_;
 
-    data1 << com_desired_(0) << "," << com_desired_(1) << endl;
+    // data1 << com_desired_(0) << "," << com_desired_(1) << endl;
 
     //variables for the linear interpolation to match the frequency difference.
     mpc_interpol_cnt_x ++;
@@ -2293,11 +2335,11 @@ void CustomController::getCPTrajectory()
     cp_desired_(1) = cp_reference_eos_(1);
 
     //saving data.
-data2 << cp_eos(0)            << "," << cp_eos(1)            << ","
-      << cp_reference_eos_(0) << "," << cp_reference_eos_(1) << ","
-      << com_reference_eos_(0)<< "," << com_reference_eos_(1)<< ","
-      << cp_zmp_eos(0)        << "," << cp_zmp_eos(1)        << ","
-      << endl;
+// data2 << cp_eos(0)            << "," << cp_eos(1)            << ","
+//       << cp_reference_eos_(0) << "," << cp_reference_eos_(1) << ","
+//       << com_reference_eos_(0)<< "," << com_reference_eos_(1)<< ","
+//       << cp_zmp_eos(0)        << "," << cp_zmp_eos(1)        << ","
+//       << endl;
 
     //Since the control framework utilizes the local frame, the state in the preview control needs to be expressed in local frame.
     //Utilizing the planned footsteps, the state is expressed in local frame at the last tick of each step.
@@ -2795,11 +2837,11 @@ void CustomController::contactWrench_Kajita()
     ZMP_X_DES_CALC = DyrosMath::minmax_cut(ZMP_X_DES_CALC, ZMP_X_REF_ - 0.09,       ZMP_X_REF_ + 0.13);
     ZMP_Y_DES_CALC = DyrosMath::minmax_cut(ZMP_Y_DES_CALC, ZMP_Y_REF_alpha_ - 0.08, ZMP_Y_REF_alpha_ + 0.08);
 
-    data3 << cp_desired_(0)  << "," << cp_desired_(1)  << ","
-          << ZMP_X_DES_CALC  << "," << ZMP_Y_DES_CALC  << ","
-          << cp_measured_(0) << "," << cp_measured_(1) << ","
-          << ZMP_X_REF_      << "," << ZMP_Y_REF_alpha_<< "," 
-          << endl;
+    // data3 << cp_desired_(0)  << "," << cp_desired_(1)  << ","
+    //       << ZMP_X_DES_CALC  << "," << ZMP_Y_DES_CALC  << ","
+    //       << cp_measured_(0) << "," << cp_measured_(1) << ","
+    //       << ZMP_X_REF_      << "," << ZMP_Y_REF_alpha_<< "," 
+    //       << endl;
 
     double foot_width_half = 0.08;
 
@@ -3028,4 +3070,47 @@ void CustomController::subDataThread3ToSlow()
 
         is_mpc_y_update = false;
     }
+}
+
+/****************************
+ * Pinocchio Related Methods*
+ ****************************/
+
+Eigen::MatrixXd CustomController::pinGetMassMatrix(const Eigen::VectorQVQd &q_virtual_pin)
+{   
+    pinocchio::crba(pin_model_, pin_data_, q_virtual_pin);
+
+    // Only upper triangular part of M_ is computed by pinocchio::crba
+    return pin_data_.M.selfadjointView<Eigen::Upper>();
+}
+
+Eigen::MatrixXd CustomController::pinGetFrameJacobian(const Eigen::VectorQVQd &q_virtual_pin, const int frame_id)
+{
+    if (frame_id == static_cast<pinocchio::FrameIndex>(-1))  
+    {
+        std::cerr << "pinGetFrameJacobian Error: Link name " << frame_id << " not found in URDF." << std::endl;
+        return MatrixXd::Zero(6, pin_model_.nv);
+    }
+
+    Eigen::MatrixXd J_temp;
+    // In Pinocchio, the Jacobian must be initialized with zeros first, e.g., J.setZero().
+    J_temp.setZero(6, pin_model_.nv);
+
+    pinocchio::computeJointJacobians(pin_model_, pin_data_, q_virtual_pin);
+
+    pinocchio::getFrameJacobian(pin_model_, pin_data_, frame_id, pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED, J_temp);
+
+    return J_temp;
+}
+
+Eigen::VectorQVQd CustomController::convertQVirtualRBDLtoPin(const Eigen::VectorQVQd &q_virtual_rbdl)
+{
+    Eigen::VectorQVQd q_virtual_pin;
+
+    q_virtual_pin.segment(0,3) = q_virtual_rbdl.segment(0,3);
+    q_virtual_pin.segment(3,3) = q_virtual_rbdl.segment(3,3);
+    q_virtual_pin(6) = q_virtual_rbdl(MODEL_DOF_VIRTUAL);
+    q_virtual_pin.segment(7, MODEL_DOF) = q_virtual_rbdl.segment(6, MODEL_DOF);
+
+    return q_virtual_pin;
 }

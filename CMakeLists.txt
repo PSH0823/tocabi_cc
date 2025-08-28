@@ -10,6 +10,10 @@ tocabi_msgs
 eigen_conversions
 )
 
+find_package(pinocchio REQUIRED)
+# https://github.com/Junhyung-Kim/tocabi_cc/blob/VIP_model/CMakeLists.txt
+# find_package(Boost REQUIRED COMPONENTS system)
+
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
@@ -34,6 +38,7 @@ add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EX
 
 target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
+  pinocchio::pinocchio
 )
 
 install(TARGETS ${PROJECT_NAME}
@@ -47,3 +52,7 @@ install(DIRECTORY include/${PROJECT_NAME}/
   FILES_MATCHING PATTERN "*.h"
   PATTERN ".svn" EXCLUDE
 )
+
+# https://github.com/stack-of-tasks/pinocchio/issues/
+# add_definitions("-DBOOST_MPL_LIMIT_LIST_SIZE=30")
+# target_compile_definitions(${PROJECT_NAME} PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
