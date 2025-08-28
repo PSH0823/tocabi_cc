@@ -409,9 +409,7 @@ public:
     double kp_cp = 0.0;
     double zmp_offset_ = 0.0;
 
-    /*******************************************
-     * Pinocchio Related Methods and Variables *
-     *******************************************/
+    //================== Pinocchio Related Methods and Variables =================//
     
      /**
       * @brief Compute the mass matrix of the robot with floating base
@@ -431,7 +429,8 @@ public:
      *                      (q[0:2]: base pos., q[3:6]: base ori.quaternion)
      * @param frame_id the id of TOCABI model in Pinocchio(see enum Pin)
      * 
-     * @return The Jacobian matrix of the given frame(including floating base)
+     * @return The Jacobian matrix of the given frame(including floating base).
+     *         The first 3 rows are the linear part and the last 3 rows are the angular part.
      */
     Eigen::MatrixXd pinGetFrameJacobian(
         const Eigen::VectorQVQd &q_virtual_pin,
@@ -484,6 +483,8 @@ public:
 
     // array to store the frame ids of specific links
     std::array<int,FRAME_COUNT> frame_id_pin_;
+
+    //=============================================================================//
 
 private:
     Eigen::VectorQd ControlVal_;
