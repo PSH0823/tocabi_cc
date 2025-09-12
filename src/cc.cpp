@@ -38,7 +38,6 @@ CustomController::CustomController(RobotData &rd) : rd_(rd)
     pinocchio::JointModelFreeFlyer floating_base;
     pinocchio::urdf::buildModel(desc_package_path, floating_base, pin_model_);
     pin_data_ = pinocchio::Data(pin_model_);
-    cout << "Model has " << pin_model_.nq << " dof" << pin_model_.nv << endl;
 
     // store the frame ids of specific links
     frame_id_pin_[PELVIS] = pin_model_.getFrameId("Pelvis_Link");
@@ -49,11 +48,12 @@ CustomController::CustomController(RobotData &rd) : rd_(rd)
     frame_id_pin_[HEAD] = pin_model_.getFrameId("Head_Link");
     frame_id_pin_[RIGHT_ELBOW] = pin_model_.getFrameId("R_Elbow_Link");
     frame_id_pin_[RIGHT_HAND] = pin_model_.getFrameId("R_Wrist2_Link");    
-    // cout << "Frame IDs in Pinocchio model:" << endl;
-    // for (int i = 0; i < FRAME_COUNT; i++) {
-    //     cout << "  " << i << ": " << frame_id_pin_[i] << endl;
-    // }
 
+    // initialize HPP-FCL collision objects for the robot links
+    col_obj_robot_links_.resize(Col_Obj_Count);
+    col_obj_robot_links_[Left_Hand_Col_ID] = assignSphereCollisionObject(rd_.link_[Left_Hand].rotm, rd_.link_[Left_Hand].xpos, 0.07);
+    col_obj_robot_links_[Right_Hand_Col_ID] = assignSphereCollisionObject(rd_.link_[Right_Hand].rotm, rd_.link_[Right_Hand].xpos, 0.07);
+    col_obj_robot_links_[Body_Col_ID] = assignBoxCollisionObject(rd_.link_[Pelvis].rotm, rd_.link_[Pelvis].xpos, 0.15, 0.15, 0.27);
 }
 
 Eigen::VectorQd CustomController::getControl()
@@ -149,6 +149,11 @@ void CustomController::computeSlow()
             }
             //----------------------------------------------------//
 
+            //-------------Collision Library Test------------------//
+            updateRobotCollisionObjectsTransforms();
+            hpp::fcl::DistanceResult col_result = getDistanceResultBetweenObjects(col_obj_robot_links_[Left_Hand_Col_ID], col_obj_robot_links_[Body_Col_ID]);
+            //----------------------------------------------------//
+
             floatToSupportFootstep();
 
             if(current_step_num_ < total_step_num_)
@@ -168,7 +173,7 @@ void CustomController::computeSlow()
                 computeIkControl(pelv_trajectory_float_, lfoot_trajectory_float_, rfoot_trajectory_float_, q_leg_desired_);
                 q_ref_.segment(0, 12) = q_leg_desired_;
 
-                if (atb_grav_update_ == false)
+               if (atb_grav_update_ == false)
                 {
                     atb_grav_update_ = true;
                     Gravity_fast_ = Gravity_;
@@ -3072,9 +3077,7 @@ void CustomController::subDataThread3ToSlow()
     }
 }
 
-/****************************
- * Pinocchio Related Methods*
- ****************************/
+//=========================== Pinocchio Related Methods and Variables ===========================//
 
 Eigen::MatrixXd CustomController::pinGetMassMatrix(const Eigen::VectorQVQd &q_virtual_pin)
 {   
@@ -3114,3 +3117,72 @@ Eigen::VectorQVQd CustomController::convertQVirtualRBDLtoPin(const Eigen::Vector
 
     return q_virtual_pin;
 }
+//____________-___________________________________________________________________________________//
+
+//=================================== HPP-FCL Related Methods ====================================//
+
+std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignSphereCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const int radius)
+{
+    // Create geometry
+    // The type of geometry should be shared pointer since it is required by CollisionObject
+    auto sphere = std::make_shared<hpp::fcl::Sphere>(radius);
+
+    // Build transform
+    hpp::fcl::Transform3f obj_tf(obj_rot, obj_trans);
+
+    // Create collision object with geometry + transform
+    auto col_obj = std::make_shared<hpp::fcl::CollisionObject>(sphere, obj_tf);
+
+    return col_obj;
+}
+
+std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignCapsuleCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const int radius, const int height)
+{
+    // Create geometry
+    // The type of geometry should be shared pointer since it is required by CollisionObject
+    auto capsule = std::make_shared<hpp::fcl::Capsule>(radius, height);
+
+    // Build transform
+    hpp::fcl::Transform3f obj_tf(obj_rot, obj_trans);
+
+    // Create collision object with geometry + transform
+    auto col_obj = std::make_shared<hpp::fcl::CollisionObject>(capsule, obj_tf);
+
+    return col_obj;
+}
+
+std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignBoxCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, int size_x, int size_y, int size_z)
+{
+    // Create geometry
+    // The type of geometry should be shared pointer since it is required by CollisionObject
+    auto box = std::make_shared<hpp::fcl::Box>(size_x, size_y, size_z);
+
+    // Build transform
+    hpp::fcl::Transform3f obj_tf(obj_rot, obj_trans);
+
+    // Create collision object with geometry + transform
+    auto col_obj = std::make_shared<hpp::fcl::CollisionObject>(box, obj_tf);
+
+    return col_obj;
+}
+
+void CustomController::updateRobotCollisionObjectsTransforms()
+{
+    col_obj_robot_links_[Left_Hand_Col_ID]->setTransform(hpp::fcl::Transform3f(rd_.link_[Left_Hand].rotm, rd_.link_[Left_Hand].xpos));
+    col_obj_robot_links_[Right_Hand_Col_ID]->setTransform(hpp::fcl::Transform3f(rd_.link_[Right_Hand].rotm, rd_.link_[Right_Hand].xpos));
+}
+
+hpp::fcl::DistanceResult CustomController::getDistanceResultBetweenObjects(std::shared_ptr<hpp::fcl::CollisionObject> col_obj1, std::shared_ptr<hpp::fcl::CollisionObject> col_obj2)
+{
+    hpp::fcl::DistanceRequest col_request;
+    col_request.enable_nearest_points = true;
+
+    hpp::fcl::DistanceResult col_result;
+    distance(col_obj1.get(), col_obj2.get(), col_request, col_result);
+    cout << "Minimum distance: " << col_result.min_distance << endl;
+    cout << "Closest point on object 1: " << col_result.nearest_points[0].transpose() << endl;
+    cout << "Closest point on object 2: " << col_result.nearest_points[1].transpose() << endl;
+
+    return col_result;
+}
+//________________________________________________________________________________________________//

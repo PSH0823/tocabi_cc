@@ -31,6 +31,13 @@
 #include <pinocchio/algorithm/compute-all-terms.hpp>
 #include <pinocchio/parsers/urdf.hpp>
 
+// Collision Libarary(HPP-FCL) Headers
+#include <hpp/fcl/shape/geometric_shapes.h>
+#include <hpp/fcl/collision_object.h>
+#include <hpp/fcl/math/transform.h>
+#include <hpp/fcl/collision_data.h>
+#include <hpp/fcl/distance.h>
+#include <hpp/fcl/collision.h>
 
 class CustomController
 {
@@ -409,7 +416,7 @@ public:
     double kp_cp = 0.0;
     double zmp_offset_ = 0.0;
 
-    //================== Pinocchio Related Methods and Variables =================//
+    //================= Pinocchio Related Methods and Variables =================//
     
      /**
       * @brief Compute the mass matrix of the robot with floating base
@@ -444,9 +451,9 @@ public:
      * 
      * @return The joint configuration of the robot + the virtual joints of the floating base in Pinocchio format
      * 
-     * @note q_virtual format of RBDL : [base pos.(x,y,z), base ori. quat(x,y,z), joint pos.(n), base ori. quat(w)]
+     * @note - q_virtual format of RBDL : [base pos.(x,y,z), base ori. quat(x,y,z), joint pos.(n), base ori. quat(w)]
      * 
-     *       q_virtual format of Pinocchio : [base pos.(x,y,z), base ori. quat(x,y,z,w), joint pos.(n)]
+     *       - q_virtual format of Pinocchio : [base pos.(x,y,z), base ori. quat(x,y,z,w), joint pos.(n)]
      */
     Eigen::VectorQVQd convertQVirtualRBDLtoPin(
         const Eigen::VectorQVQd &q_virtual_rbdl
@@ -484,7 +491,103 @@ public:
     // array to store the frame ids of specific links
     std::array<int,FRAME_COUNT> frame_id_pin_;
 
-    //=============================================================================//
+    //____________________________________________________________________________//
+
+    //================== HPP-FCL Related Methods and Variables ===================//
+
+    
+    /**
+     * @brief Assign a collision object as a sphere shape to the target object
+     * 
+     * @param obj_rot the rotation matrix of the coordinate of the collision object
+     * @param obj_trans the translation of the coordinate of the collision object
+     * @param radius the radius of the sphere
+     * 
+     * @return The assigned collision object as a sphere shape
+     */
+    std::shared_ptr<hpp::fcl::CollisionObject> assignSphereCollisionObject(const Eigen::Matrix3d obj_rot,
+                                                                           const Eigen::Vector3d obj_trans,
+                                                                           const int radius
+                                                                           );
+    
+    /**
+     * @brief Assign a collision object as a capsule shape to the target object
+     * 
+     * @param obj_rot the rotation matrix of the coordinate of the collision object
+     * @param obj_trans the translation of the coordinate of the collision object
+     * @param radius the radius of the capsule
+     * @param height the height of the capsule
+     * 
+     * @return The assigned collision object as a capsule shape
+     */
+    std::shared_ptr<hpp::fcl::CollisionObject> assignCapsuleCollisionObject(const Eigen::Matrix3d obj_rot,
+                                                                            const Eigen::Vector3d obj_trans,
+                                                                            const int radius,
+                                                                            const int height
+                                                                            );
+    
+    /**
+     * @brief Assign a collision object as a box shape to the target object
+     * 
+     * @param obj_rot the rotation matrix of the coordinate of the collision object
+     * @param obj_trans the translation of the coordinate of the collision object
+     * @param size_x the size of the box in x direction
+     * @param size_y the size of the box in y direction
+     * @param size_z the size of the box in z direction
+     * 
+     * @return The assigned collision object as a box shape
+     */
+    std::shared_ptr<hpp::fcl::CollisionObject> assignBoxCollisionObject(const Eigen::Matrix3d obj_rot,
+                                                                        const Eigen::Vector3d obj_trans,
+                                                                        int size_x,
+                                                                        int size_y,
+                                                                        int size_z
+                                                                        );
+
+    /**
+     * @brief Update the transformation matrices of the robot's collision objects.
+     * 
+     * @note This method should be called after updating the robot's model and computing forward kinematics,
+     * so that the collision objects correctly reflect the current joint configuration.
+     */
+    void updateRobotCollisionObjectsTransforms();
+
+    /**
+     * @brief get the DistanceResult structure between two collision objects
+     * 
+     * @param col_obj1 The first collision object.
+     * @param col_obj2 The second collision object.
+     * 
+     * @return A DistanceResult structure containing the minimum distance and the closest points between the two objects.
+     * 
+     * @note - minimum distance: <Name-of-DistanceResult>.min_distance
+     * 
+     *       - closest point on object 1: <Name-of-DistanceResult>.nearest_points[0]
+     * 
+     *       - closest point on object 2: <Name-of-DistanceResult>.nearest_points[1]
+     */                                                                
+    hpp::fcl::DistanceResult getDistanceResultBetweenObjects(std::shared_ptr<hpp::fcl::CollisionObject> col_obj1,
+                                                             std::shared_ptr<hpp::fcl::CollisionObject> col_obj2
+                                                             );
+
+    /** @brief Variables using HPP-FCL library*/
+    // enum for the index of collision objects for the robot links
+    enum CollisionObjectIdx
+    {
+        Left_Hand_Col_ID,
+        Right_Hand_Col_ID,
+        Body_Col_ID,
+        Col_Obj_Count  // total number of collision Objects in Robot (used for col_obj_robot_links_ array sizing)
+    };
+
+    // collision objects for the robot links
+    vector<std::shared_ptr<hpp::fcl::CollisionObject>> col_obj_robot_links_;
+
+    // collision objects for the environment
+    vector<std::shared_ptr<hpp::fcl::CollisionObject>> col_obj_obstacles_;
+
+    
+    //___________________________________________________________________________//
 
 private:
     Eigen::VectorQd ControlVal_;
