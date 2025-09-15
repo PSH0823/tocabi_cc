@@ -39,6 +39,10 @@
 #include <hpp/fcl/distance.h>
 #include <hpp/fcl/collision.h>
 
+// Headers for Sending TF information of camera frame to NUC
+#include <tf2_ros/transform_broadcaster.h>
+#include <geometry_msgs/TransformStamped.h>
+
 class CustomController
 {
 public:
@@ -436,8 +440,8 @@ public:
      *                      (q[0:2]: base pos., q[3:6]: base ori.quaternion)
      * @param frame_id the id of TOCABI model in Pinocchio(see enum Pin)
      * 
-     * @return The Jacobian matrix of the given frame(including floating base).
-     *         The first 3 rows are the linear part and the last 3 rows are the angular part.
+     * @return The Jacobian matrix of the given frame(including floating base),
+     *         the first 3 rows are the linear part and the last 3 rows are the angular part
      */
     Eigen::MatrixXd pinGetFrameJacobian(
         const Eigen::VectorQVQd &q_virtual_pin,
@@ -545,10 +549,10 @@ public:
                                                                         );
 
     /**
-     * @brief Update the transformation matrices of the robot's collision objects.
+     * @brief Update the transformation matrices of the robot's collision objects
      * 
      * @note This method should be called after updating the robot's model and computing forward kinematics,
-     * so that the collision objects correctly reflect the current joint configuration.
+     *       so that the collision objects correctly reflect the current joint configuration
      */
     void updateRobotCollisionObjectsTransforms();
 
@@ -558,7 +562,7 @@ public:
      * @param col_obj1 The first collision object.
      * @param col_obj2 The second collision object.
      * 
-     * @return A DistanceResult structure containing the minimum distance and the closest points between the two objects.
+     * @return A DistanceResult structure containing the minimum distance and the closest points between the two objects
      * 
      * @note - minimum distance: <Name-of-DistanceResult>.min_distance
      * 
@@ -585,8 +589,23 @@ public:
 
     // collision objects for the environment
     vector<std::shared_ptr<hpp::fcl::CollisionObject>> col_obj_obstacles_;
-
     
+    //___________________________________________________________________________//
+
+    //============ Methods and Variables for Communication with NUC =============//
+    // NUC is a TOCABI vision PC
+
+    /**
+     * @brief Publish the transformation matrix from world frame to head frame
+     * 
+     * @note This method uses ROS tf2 to broadcast the transformation matrix,
+     *       used to calcualte the position of the QR codes in the world frame
+     */
+    void pubWorldtoHeadTF();
+
+    geometry_msgs::TransformStamped ts_world_to_head_;
+    tf2_ros::TransformBroadcaster tf_broadcaster_;
+
     //___________________________________________________________________________//
 
 private:

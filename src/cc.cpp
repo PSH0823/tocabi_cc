@@ -3186,3 +3186,30 @@ hpp::fcl::DistanceResult CustomController::getDistanceResultBetweenObjects(std::
     return col_result;
 }
 //________________________________________________________________________________________________//
+
+//============================== Methods for Communication with NUC ==============================//
+
+void CustomController::pubWorldtoHeadTF()
+{
+    ts_world_to_head_.header.stamp = ros::Time::now();
+
+    // frame id
+    ts_world_to_head_.header.frame_id = "world";
+    ts_world_to_head_.child_frame_id = "head_link";
+
+    // translation
+    ts_world_to_head_.transform.translation.x = rd_.link_[Head].xpos(0);
+    ts_world_to_head_.transform.translation.y = rd_.link_[Head].xpos(1);
+    ts_world_to_head_.transform.translation.z = rd_.link_[Head].xpos(2);
+
+    // rotation matrix -> quaternion
+    Eigen::Quaterniond quat_head(rd_.link_[Head].rotm);
+    ts_world_to_head_.transform.rotation.x = quat_head.x();
+    ts_world_to_head_.transform.rotation.y = quat_head.y();
+    ts_world_to_head_.transform.rotation.z = quat_head.z();
+    ts_world_to_head_.transform.rotation.w = quat_head.w();
+
+    tf_broadcaster_.sendTransform(ts_world_to_head_);
+}
+
+//________________________________________________________________________________________________//
