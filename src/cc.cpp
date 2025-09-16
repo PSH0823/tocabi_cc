@@ -12,7 +12,7 @@ ofstream data3("/home/sanghyuk/MATLAB/data/data3.txt");
 ofstream data4("/home/sanghyuk/MATLAB/data/data4.txt");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-CustomController::CustomController(RobotData &rd) : rd_(rd) 
+CustomController::CustomController(RobotData &rd) : rd_(rd), tf_listener_(tf_buffer_)
 {
     nh_cc_.setCallbackQueue(&queue_cc_);
 
@@ -72,6 +72,17 @@ void CustomController::computeSlow()
 
     if (rd_.tc_.mode == 6)
     {   
+        getBasetoHeadTransform();
+        pubBasetoHeadTransform();
+        if (mode6_tick_ % 67 == 0) // about 30Hz
+        {
+            base_to_qr_transform_ = getBasetoQRTransform();
+            if (mode6_tick_ % 670 == 0){
+                ROS_INFO_STREAM("----------------------------------------------------");
+                ROS_INFO_STREAM("base2qr transform:\n" << base_to_qr_transform_.matrix());
+            }
+        }
+
         if (is_mode_6_init == true)
         {
             if (initial_flag == 0)
@@ -103,6 +114,7 @@ void CustomController::computeSlow()
         }
 
         moveInitialPose();
+        mode6_tick_++;
 
         rd_.torque_desired = Kp_diag * (q_ref_ - rd_.q_) - Kd_diag * rd_.q_dot_ + Gravity_fast_;
     }
@@ -3189,27 +3201,66 @@ hpp::fcl::DistanceResult CustomController::getDistanceResultBetweenObjects(std::
 
 //============================== Methods for Communication with NUC ==============================//
 
-void CustomController::pubWorldtoHeadTF()
+void CustomController::pubBasetoHeadTransform()
 {
-    ts_world_to_head_.header.stamp = ros::Time::now();
+    // ts_base_to_head stores the transform data between base_link and head_link
+    ts_base_to_head_.header.stamp = ros::Time::now();
 
     // frame id
-    ts_world_to_head_.header.frame_id = "world";
-    ts_world_to_head_.child_frame_id = "head_link";
+    ts_base_to_head_.header.frame_id = "base_link";
+    ts_base_to_head_.child_frame_id = "head_link";
 
     // translation
-    ts_world_to_head_.transform.translation.x = rd_.link_[Head].xpos(0);
-    ts_world_to_head_.transform.translation.y = rd_.link_[Head].xpos(1);
-    ts_world_to_head_.transform.translation.z = rd_.link_[Head].xpos(2);
+    ts_base_to_head_.transform.translation.x = base_to_head_transform_.translation()(0);
+    ts_base_to_head_.transform.translation.y = base_to_head_transform_.translation()(1);
+    ts_base_to_head_.transform.translation.z = base_to_head_transform_.translation()(2);
 
     // rotation matrix -> quaternion
-    Eigen::Quaterniond quat_head(rd_.link_[Head].rotm);
-    ts_world_to_head_.transform.rotation.x = quat_head.x();
-    ts_world_to_head_.transform.rotation.y = quat_head.y();
-    ts_world_to_head_.transform.rotation.z = quat_head.z();
-    ts_world_to_head_.transform.rotation.w = quat_head.w();
+    Eigen::Quaterniond quat_head(base_to_head_transform_.rotation());
+    ts_base_to_head_.transform.rotation.x = quat_head.x();
+    ts_base_to_head_.transform.rotation.y = quat_head.y();
+    ts_base_to_head_.transform.rotation.z = quat_head.z();
+    ts_base_to_head_.transform.rotation.w = quat_head.w();
 
-    tf_broadcaster_.sendTransform(ts_world_to_head_);
+    // tf_broadcaster publishes the transform data
+    tf_broadcaster_.sendTransform(ts_base_to_head_);
+}
+
+Eigen::Isometry3d CustomController::getBasetoQRTransform()
+{
+    Eigen::Isometry3d base_to_qr_transform;
+
+    try
+    {
+        // listener looks for the transform data between base_link and qr_code(object_frame)
+        ts_base_to_qr_ = tf_buffer_.lookupTransform("base_link", "object_frame", ros::Time(0));
+
+        // store the translation data
+        base_to_qr_transform.translation() << ts_base_to_qr_.transform.translation.x,
+                                              ts_base_to_qr_.transform.translation.y,
+                                              ts_base_to_qr_.transform.translation.z;
+        // store the rotation data (quaternion -> rotation matrix)
+        Eigen::Quaterniond quat_qr(ts_base_to_qr_.transform.rotation.w,
+                                   ts_base_to_qr_.transform.rotation.x,
+                                   ts_base_to_qr_.transform.rotation.y,
+                                   ts_base_to_qr_.transform.rotation.z);
+        base_to_qr_transform.linear() = quat_qr.toRotationMatrix();
+    }
+    catch (tf2::TransformException &ex)
+    {
+        ROS_ERROR("Failed to lookup transform form base_link to object_frame: %s", ex.what());
+        base_to_qr_transform.setIdentity();
+    }
+    
+    return base_to_qr_transform;
+}
+
+void CustomController::getBasetoHeadTransform(){
+    global_to_base_rot_yaw_only_ = DyrosMath::rotateWithZ(DyrosMath::rot2Euler(rd_.link_[Pelvis].rotm)(2));
+    global_to_base_trans_ = rd_.link_[Pelvis].xpos;
+
+    base_to_head_transform_.linear() = global_to_base_rot_yaw_only_.transpose() * rd_.link_[Head].rotm;
+    base_to_head_transform_.translation() = global_to_base_rot_yaw_only_.transpose() * (rd_.link_[Head].xpos - rd_.link_[Pelvis].xpos);
 }
 
 //________________________________________________________________________________________________//

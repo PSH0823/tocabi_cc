@@ -41,7 +41,11 @@
 
 // Headers for Sending TF information of camera frame to NUC
 #include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2/exceptions.h>
 #include <geometry_msgs/TransformStamped.h>
+
 
 class CustomController
 {
@@ -593,18 +597,42 @@ public:
     //___________________________________________________________________________//
 
     //============ Methods and Variables for Communication with NUC =============//
-    // NUC is a TOCABI vision PC
+    /** @note NUC is a TOCABI vision PC */
 
     /**
-     * @brief Publish the transformation matrix from world frame to head frame
+     * @brief Publish the transformation matrix from base frame to head frame
      * 
-     * @note This method uses ROS tf2 to broadcast the transformation matrix,
-     *       used to calcualte the position of the QR codes in the world frame
+     * @note This method uses ROS tf2 to broadcast the transformation matrix
      */
-    void pubWorldtoHeadTF();
+    void pubBasetoHeadTransform();
 
-    geometry_msgs::TransformStamped ts_world_to_head_;
+    /**
+     * @brief Get the transformation matrix from base frame to QR Code(ArUCo) frame
+     * 
+     * @return The transformation matrix from base frame to QR Code(ArUCo) frame(object frame)
+     * 
+     * @note This method uses ROS tf2 to lookup the transformation matrix
+     */
+    Eigen::Isometry3d getBasetoQRTransform();
+
+    /** This method is for checking aruco code detection
+     * @brief Get the transformation matrix from base frame to head frame
+     */
+    void getBasetoHeadTransform();
+
+    /** @brief tf2_ros variables for communication */
+    geometry_msgs::TransformStamped ts_base_to_head_;
+    geometry_msgs::TransformStamped ts_base_to_qr_;
     tf2_ros::TransformBroadcaster tf_broadcaster_;
+    tf2_ros::Buffer tf_buffer_;
+    tf2_ros::TransformListener tf_listener_;    // needs tf_buffer_ as input(initializer list of constructor)
+
+    // transformation matrices
+    Eigen::Isometry3d base_to_qr_transform_;    // from base frame to object frame
+    Eigen::Isometry3d base_to_head_transform_;  // from base frame to head frame
+    //rotation matrix and translation vector from global frame to base frame
+    Eigen::Matrix3d global_to_base_rot_yaw_only_;
+    Eigen::Vector3d global_to_base_trans_;
 
     //___________________________________________________________________________//
 
@@ -621,6 +649,7 @@ private:
     unsigned int com_start_time_ = 0;
 
     unsigned int initial_tick_ = 0;
+    unsigned int mode6_tick_ = 0;
     const double hz_ = 2000.0;
 
     //const double mpc_freq = 100.0;
