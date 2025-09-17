@@ -515,7 +515,7 @@ public:
      */
     std::shared_ptr<hpp::fcl::CollisionObject> assignSphereCollisionObject(const Eigen::Matrix3d obj_rot,
                                                                            const Eigen::Vector3d obj_trans,
-                                                                           const int radius
+                                                                           const double radius
                                                                            );
     
     /**
@@ -530,8 +530,8 @@ public:
      */
     std::shared_ptr<hpp::fcl::CollisionObject> assignCapsuleCollisionObject(const Eigen::Matrix3d obj_rot,
                                                                             const Eigen::Vector3d obj_trans,
-                                                                            const int radius,
-                                                                            const int height
+                                                                            const double radius,
+                                                                            const double height
                                                                             );
     
     /**
@@ -547,9 +547,9 @@ public:
      */
     std::shared_ptr<hpp::fcl::CollisionObject> assignBoxCollisionObject(const Eigen::Matrix3d obj_rot,
                                                                         const Eigen::Vector3d obj_trans,
-                                                                        int size_x,
-                                                                        int size_y,
-                                                                        int size_z
+                                                                        const double size_x,
+                                                                        const double size_y,
+                                                                        const double size_z
                                                                         );
 
     /**

@@ -146,19 +146,19 @@ void CustomController::computeSlow()
             J_pin_pelv_ = pinGetFrameJacobian(q_virtual_pin_, frame_id_pin_[PELVIS]);
             M_pin_ = pinGetMassMatrix(q_virtual_pin_);
 
-            if(walking_tick % 500 == 0){
-                data1 << walking_tick/hz_ << endl;
-                data1 << M_pin_ << endl;
+            // if(walking_tick % 500 == 0){
+            //     data1 << walking_tick/hz_ << endl;
+            //     data1 << M_pin_ << endl;
 
-                data2 << walking_tick/hz_ << endl;
-                data2 << J_pin_lfoot_ << endl;
+            //     data2 << walking_tick/hz_ << endl;
+            //     data2 << J_pin_lfoot_ << endl;
 
-                data3 << walking_tick/hz_ << endl;
-                data3 << rd_.A_ << endl;
+            //     data3 << walking_tick/hz_ << endl;
+            //     data3 << rd_.A_ << endl;
                 
-                data4 << walking_tick/hz_ << endl;
-                data4 << rd_.link_[Left_Foot].jac << endl;
-            }
+            //     data4 << walking_tick/hz_ << endl;
+            //     data4 << rd_.link_[Left_Foot].jac << endl;
+            // }
             //----------------------------------------------------//
 
             //-------------Collision Library Test------------------//
@@ -3133,7 +3133,7 @@ Eigen::VectorQVQd CustomController::convertQVirtualRBDLtoPin(const Eigen::Vector
 
 //=================================== HPP-FCL Related Methods ====================================//
 
-std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignSphereCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const int radius)
+std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignSphereCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const double radius)
 {
     // Create geometry
     // The type of geometry should be shared pointer since it is required by CollisionObject
@@ -3148,7 +3148,7 @@ std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignSphereCollisi
     return col_obj;
 }
 
-std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignCapsuleCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const int radius, const int height)
+std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignCapsuleCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const double radius, const double height)
 {
     // Create geometry
     // The type of geometry should be shared pointer since it is required by CollisionObject
@@ -3163,7 +3163,7 @@ std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignCapsuleCollis
     return col_obj;
 }
 
-std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignBoxCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, int size_x, int size_y, int size_z)
+std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignBoxCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const double size_x, const double size_y, const double size_z)
 {
     // Create geometry
     // The type of geometry should be shared pointer since it is required by CollisionObject
