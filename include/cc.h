@@ -17,6 +17,7 @@
 #include <iostream>
 
 #include <mpc.h>
+#include "collision_manager.h"
 
 // Pinocchio Headers
 #include <pinocchio/multibody/model.hpp>
@@ -66,6 +67,8 @@ public:
 
     RobotData &rd_;
     RobotData rd_cc_;
+
+    CollisionManager col_mgr_;
 
     ros::NodeHandle nh_cc_;
     ros::CallbackQueue queue_cc_;
@@ -424,7 +427,7 @@ public:
     double kp_cp = 0.0;
     double zmp_offset_ = 0.0;
 
-    //================= Pinocchio Related Methods and Variables =================//
+    //================================ Pinocchio =================================//
     
      /**
       * @brief Compute the mass matrix of the robot with floating base
@@ -501,141 +504,6 @@ public:
 
     //____________________________________________________________________________//
 
-    //================== HPP-FCL Related Methods and Variables ===================//
-
-    
-    /**
-     * @brief Assign a collision object as a sphere shape to the target object
-     * 
-     * @param obj_rot the rotation matrix of the coordinate of the collision object
-     * @param obj_trans the translation of the coordinate of the collision object
-     * @param radius the radius of the sphere
-     * 
-     * @return The assigned collision object as a sphere shape
-     */
-    std::shared_ptr<hpp::fcl::CollisionObject> assignSphereCollisionObject(const Eigen::Matrix3d obj_rot,
-                                                                           const Eigen::Vector3d obj_trans,
-                                                                           const double radius
-                                                                           );
-    
-    /**
-     * @brief Assign a collision object as a capsule shape to the target object
-     * 
-     * @param obj_rot the rotation matrix of the coordinate of the collision object
-     * @param obj_trans the translation of the coordinate of the collision object
-     * @param radius the radius of the capsule
-     * @param height the height of the capsule
-     * 
-     * @return The assigned collision object as a capsule shape
-     */
-    std::shared_ptr<hpp::fcl::CollisionObject> assignCapsuleCollisionObject(const Eigen::Matrix3d obj_rot,
-                                                                            const Eigen::Vector3d obj_trans,
-                                                                            const double radius,
-                                                                            const double height
-                                                                            );
-    
-    /**
-     * @brief Assign a collision object as a box shape to the target object
-     * 
-     * @param obj_rot the rotation matrix of the coordinate of the collision object
-     * @param obj_trans the translation of the coordinate of the collision object
-     * @param size_x the size of the box in x direction
-     * @param size_y the size of the box in y direction
-     * @param size_z the size of the box in z direction
-     * 
-     * @return The assigned collision object as a box shape
-     */
-    std::shared_ptr<hpp::fcl::CollisionObject> assignBoxCollisionObject(const Eigen::Matrix3d obj_rot,
-                                                                        const Eigen::Vector3d obj_trans,
-                                                                        const double size_x,
-                                                                        const double size_y,
-                                                                        const double size_z
-                                                                        );
-
-    /**
-     * @brief Update the transformation matrices of the robot's collision objects
-     * 
-     * @note This method should be called after updating the robot's model and computing forward kinematics,
-     *       so that the collision objects correctly reflect the current joint configuration
-     */
-    void updateRobotCollisionObjectsTransforms();
-
-    /**
-     * @brief get the DistanceResult structure between two collision objects
-     * 
-     * @param col_obj1 The first collision object.
-     * @param col_obj2 The second collision object.
-     * 
-     * @return A DistanceResult structure containing the minimum distance and the closest points between the two objects
-     * 
-     * @note - minimum distance: <Name-of-DistanceResult>.min_distance
-     * 
-     *       - closest point on object 1: <Name-of-DistanceResult>.nearest_points[0]
-     * 
-     *       - closest point on object 2: <Name-of-DistanceResult>.nearest_points[1]
-     */                                                                
-    hpp::fcl::DistanceResult getDistanceResultBetweenObjects(std::shared_ptr<hpp::fcl::CollisionObject> col_obj1,
-                                                             std::shared_ptr<hpp::fcl::CollisionObject> col_obj2
-                                                             );
-
-    /** @brief Variables using HPP-FCL library*/
-    // enum for the index of collision objects for the robot links
-    enum CollisionObjectIdx
-    {
-        Left_Hand_Col_ID,
-        Right_Hand_Col_ID,
-        Body_Col_ID,
-        Col_Obj_Count  // total number of collision Objects in Robot (used for col_obj_robot_links_ array sizing)
-    };
-
-    // collision objects for the robot links
-    vector<std::shared_ptr<hpp::fcl::CollisionObject>> col_obj_robot_links_;
-
-    // collision objects for the environment
-    vector<std::shared_ptr<hpp::fcl::CollisionObject>> col_obj_obstacles_;
-    
-    //___________________________________________________________________________//
-
-    //============ Methods and Variables for Communication with NUC =============//
-    /** @note NUC is a TOCABI vision PC */
-
-    /**
-     * @brief Publish the transformation matrix from base frame to head frame
-     * 
-     * @note This method uses ROS tf2 to broadcast the transformation matrix
-     */
-    void pubBasetoHeadTransform();
-
-    /**
-     * @brief Get the transformation matrix from base frame to QR Code(ArUCo) frame
-     * 
-     * @return The transformation matrix from base frame to QR Code(ArUCo) frame(object frame)
-     * 
-     * @note This method uses ROS tf2 to lookup the transformation matrix
-     */
-    Eigen::Isometry3d getBasetoQRTransform();
-
-    /** This method is for checking aruco code detection
-     * @brief Get the transformation matrix from base frame to head frame
-     */
-    void getBasetoHeadTransform();
-
-    /** @brief tf2_ros variables for communication */
-    geometry_msgs::TransformStamped ts_base_to_head_;
-    geometry_msgs::TransformStamped ts_base_to_qr_;
-    tf2_ros::TransformBroadcaster tf_broadcaster_;
-    tf2_ros::Buffer tf_buffer_;
-    tf2_ros::TransformListener tf_listener_;    // needs tf_buffer_ as input(initializer list of constructor)
-
-    // transformation matrices
-    Eigen::Isometry3d base_to_qr_transform_;    // from base frame to object frame
-    Eigen::Isometry3d base_to_head_transform_;  // from base frame to head frame
-    //rotation matrix and translation vector from global frame to base frame
-    Eigen::Matrix3d global_to_base_rot_yaw_only_;
-    Eigen::Vector3d global_to_base_trans_;
-
-    //___________________________________________________________________________//
-
 private:
     Eigen::VectorQd ControlVal_;
     unsigned int walking_tick = 0;
@@ -650,6 +518,7 @@ private:
 
     unsigned int initial_tick_ = 0;
     unsigned int mode6_tick_ = 0;
+    unsigned int sim_tick_ = 0;
     const double hz_ = 2000.0;
 
     //const double mpc_freq = 100.0;

@@ -12,7 +12,7 @@ ofstream data3("/home/sanghyuk/MATLAB/data/data3.txt");
 ofstream data4("/home/sanghyuk/MATLAB/data/data4.txt");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-CustomController::CustomController(RobotData &rd) : rd_(rd), tf_listener_(tf_buffer_)
+CustomController::CustomController(RobotData &rd) : rd_(rd), col_mgr_(rd)
 {
     nh_cc_.setCallbackQueue(&queue_cc_);
 
@@ -48,12 +48,6 @@ CustomController::CustomController(RobotData &rd) : rd_(rd), tf_listener_(tf_buf
     frame_id_pin_[HEAD] = pin_model_.getFrameId("Head_Link");
     frame_id_pin_[RIGHT_ELBOW] = pin_model_.getFrameId("R_Elbow_Link");
     frame_id_pin_[RIGHT_HAND] = pin_model_.getFrameId("R_Wrist2_Link");    
-
-    // initialize HPP-FCL collision objects for the robot links
-    col_obj_robot_links_.resize(Col_Obj_Count);
-    col_obj_robot_links_[Left_Hand_Col_ID] = assignSphereCollisionObject(rd_.link_[Left_Hand].rotm, rd_.link_[Left_Hand].xpos, 0.07);
-    col_obj_robot_links_[Right_Hand_Col_ID] = assignSphereCollisionObject(rd_.link_[Right_Hand].rotm, rd_.link_[Right_Hand].xpos, 0.07);
-    col_obj_robot_links_[Body_Col_ID] = assignBoxCollisionObject(rd_.link_[Pelvis].rotm, rd_.link_[Pelvis].xpos, 0.15, 0.15, 0.27);
 }
 
 Eigen::VectorQd CustomController::getControl()
@@ -70,16 +64,19 @@ void CustomController::computeSlow()
 {
     queue_cc_.callAvailable(ros::WallDuration());
 
+    col_mgr_.pubQRObstaclePose(sim_tick_, hz_);
+    sim_tick_++;
+
     if (rd_.tc_.mode == 6)
     {   
-        getBasetoHeadTransform();
-        pubBasetoHeadTransform();
+        col_mgr_.getBasetoHeadTransform();
+        col_mgr_.pubBasetoHeadTransform();
         if (mode6_tick_ % 67 == 0) // about 30Hz
         {
-            base_to_qr_transform_ = getBasetoQRTransform();
+            col_mgr_.base_to_qr_transform_ = col_mgr_.getBasetoQRTransform();
             if (mode6_tick_ % 670 == 0){
                 ROS_INFO_STREAM("----------------------------------------------------");
-                ROS_INFO_STREAM("base2qr transform:\n" << base_to_qr_transform_.matrix());
+                ROS_INFO_STREAM("base2qr transform:\n" << col_mgr_.base_to_qr_transform_.matrix());
             }
         }
 
@@ -115,7 +112,7 @@ void CustomController::computeSlow()
 
         moveInitialPose();
         mode6_tick_++;
-
+        
         rd_.torque_desired = Kp_diag * (q_ref_ - rd_.q_) - Kd_diag * rd_.q_dot_ + Gravity_fast_;
     }
     else if (rd_.tc_.mode == 7)
@@ -145,25 +142,13 @@ void CustomController::computeSlow()
             J_pin_lfoot_ = pinGetFrameJacobian(q_virtual_pin_, frame_id_pin_[LEFT_FOOT]);
             J_pin_pelv_ = pinGetFrameJacobian(q_virtual_pin_, frame_id_pin_[PELVIS]);
             M_pin_ = pinGetMassMatrix(q_virtual_pin_);
-
-            // if(walking_tick % 500 == 0){
-            //     data1 << walking_tick/hz_ << endl;
-            //     data1 << M_pin_ << endl;
-
-            //     data2 << walking_tick/hz_ << endl;
-            //     data2 << J_pin_lfoot_ << endl;
-
-            //     data3 << walking_tick/hz_ << endl;
-            //     data3 << rd_.A_ << endl;
-                
-            //     data4 << walking_tick/hz_ << endl;
-            //     data4 << rd_.link_[Left_Foot].jac << endl;
-            // }
             //----------------------------------------------------//
 
             //-------------Collision Library Test------------------//
-            updateRobotCollisionObjectsTransforms();
-            hpp::fcl::DistanceResult col_result = getDistanceResultBetweenObjects(col_obj_robot_links_[Left_Hand_Col_ID], col_obj_robot_links_[Body_Col_ID]);
+            col_mgr_.updateRobotCollisionObjectsTransforms();
+            hpp::fcl::DistanceResult col_result = col_mgr_.getDistanceResultBetweenObjects(col_mgr_.Left_Hand_Col_ID,
+                                                                                           col_mgr_.Left_Hand_Col_ID,
+                                                                                           col_mgr_.Links);
             //----------------------------------------------------//
 
             floatToSupportFootstep();
@@ -3089,7 +3074,7 @@ void CustomController::subDataThread3ToSlow()
     }
 }
 
-//=========================== Pinocchio Related Methods and Variables ===========================//
+//========================================== Pinocchio ===========================================//
 
 Eigen::MatrixXd CustomController::pinGetMassMatrix(const Eigen::VectorQVQd &q_virtual_pin)
 {   
@@ -3129,138 +3114,5 @@ Eigen::VectorQVQd CustomController::convertQVirtualRBDLtoPin(const Eigen::Vector
 
     return q_virtual_pin;
 }
+
 //____________-___________________________________________________________________________________//
-
-//=================================== HPP-FCL Related Methods ====================================//
-
-std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignSphereCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const double radius)
-{
-    // Create geometry
-    // The type of geometry should be shared pointer since it is required by CollisionObject
-    auto sphere = std::make_shared<hpp::fcl::Sphere>(radius);
-
-    // Build transform
-    hpp::fcl::Transform3f obj_tf(obj_rot, obj_trans);
-
-    // Create collision object with geometry + transform
-    auto col_obj = std::make_shared<hpp::fcl::CollisionObject>(sphere, obj_tf);
-
-    return col_obj;
-}
-
-std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignCapsuleCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const double radius, const double height)
-{
-    // Create geometry
-    // The type of geometry should be shared pointer since it is required by CollisionObject
-    auto capsule = std::make_shared<hpp::fcl::Capsule>(radius, height);
-
-    // Build transform
-    hpp::fcl::Transform3f obj_tf(obj_rot, obj_trans);
-
-    // Create collision object with geometry + transform
-    auto col_obj = std::make_shared<hpp::fcl::CollisionObject>(capsule, obj_tf);
-
-    return col_obj;
-}
-
-std::shared_ptr<hpp::fcl::CollisionObject> CustomController::assignBoxCollisionObject(const Eigen::Matrix3d obj_rot, const Eigen::Vector3d obj_trans, const double size_x, const double size_y, const double size_z)
-{
-    // Create geometry
-    // The type of geometry should be shared pointer since it is required by CollisionObject
-    auto box = std::make_shared<hpp::fcl::Box>(size_x, size_y, size_z);
-
-    // Build transform
-    hpp::fcl::Transform3f obj_tf(obj_rot, obj_trans);
-
-    // Create collision object with geometry + transform
-    auto col_obj = std::make_shared<hpp::fcl::CollisionObject>(box, obj_tf);
-
-    return col_obj;
-}
-
-void CustomController::updateRobotCollisionObjectsTransforms()
-{
-    col_obj_robot_links_[Left_Hand_Col_ID]->setTransform(hpp::fcl::Transform3f(rd_.link_[Left_Hand].rotm, rd_.link_[Left_Hand].xpos));
-    col_obj_robot_links_[Right_Hand_Col_ID]->setTransform(hpp::fcl::Transform3f(rd_.link_[Right_Hand].rotm, rd_.link_[Right_Hand].xpos));
-}
-
-hpp::fcl::DistanceResult CustomController::getDistanceResultBetweenObjects(std::shared_ptr<hpp::fcl::CollisionObject> col_obj1, std::shared_ptr<hpp::fcl::CollisionObject> col_obj2)
-{
-    hpp::fcl::DistanceRequest col_request;
-    col_request.enable_nearest_points = true;
-
-    hpp::fcl::DistanceResult col_result;
-    distance(col_obj1.get(), col_obj2.get(), col_request, col_result);
-    cout << "Minimum distance: " << col_result.min_distance << endl;
-    cout << "Closest point on object 1: " << col_result.nearest_points[0].transpose() << endl;
-    cout << "Closest point on object 2: " << col_result.nearest_points[1].transpose() << endl;
-
-    return col_result;
-}
-//________________________________________________________________________________________________//
-
-//============================== Methods for Communication with NUC ==============================//
-
-void CustomController::pubBasetoHeadTransform()
-{
-    // ts_base_to_head stores the transform data between base_link and head_link
-    ts_base_to_head_.header.stamp = ros::Time::now();
-
-    // frame id
-    ts_base_to_head_.header.frame_id = "base_link";
-    ts_base_to_head_.child_frame_id = "head_link";
-
-    // translation
-    ts_base_to_head_.transform.translation.x = base_to_head_transform_.translation()(0);
-    ts_base_to_head_.transform.translation.y = base_to_head_transform_.translation()(1);
-    ts_base_to_head_.transform.translation.z = base_to_head_transform_.translation()(2);
-
-    // rotation matrix -> quaternion
-    Eigen::Quaterniond quat_head(base_to_head_transform_.rotation());
-    ts_base_to_head_.transform.rotation.x = quat_head.x();
-    ts_base_to_head_.transform.rotation.y = quat_head.y();
-    ts_base_to_head_.transform.rotation.z = quat_head.z();
-    ts_base_to_head_.transform.rotation.w = quat_head.w();
-
-    // tf_broadcaster publishes the transform data
-    tf_broadcaster_.sendTransform(ts_base_to_head_);
-}
-
-Eigen::Isometry3d CustomController::getBasetoQRTransform()
-{
-    Eigen::Isometry3d base_to_qr_transform;
-
-    try
-    {
-        // listener looks for the transform data between base_link and qr_code(object_frame)
-        ts_base_to_qr_ = tf_buffer_.lookupTransform("base_link", "object_frame", ros::Time(0));
-
-        // store the translation data
-        base_to_qr_transform.translation() << ts_base_to_qr_.transform.translation.x,
-                                              ts_base_to_qr_.transform.translation.y,
-                                              ts_base_to_qr_.transform.translation.z;
-        // store the rotation data (quaternion -> rotation matrix)
-        Eigen::Quaterniond quat_qr(ts_base_to_qr_.transform.rotation.w,
-                                   ts_base_to_qr_.transform.rotation.x,
-                                   ts_base_to_qr_.transform.rotation.y,
-                                   ts_base_to_qr_.transform.rotation.z);
-        base_to_qr_transform.linear() = quat_qr.toRotationMatrix();
-    }
-    catch (tf2::TransformException &ex)
-    {
-        ROS_ERROR("Failed to lookup transform form base_link to object_frame: %s", ex.what());
-        base_to_qr_transform.setIdentity();
-    }
-    
-    return base_to_qr_transform;
-}
-
-void CustomController::getBasetoHeadTransform(){
-    global_to_base_rot_yaw_only_ = DyrosMath::rotateWithZ(DyrosMath::rot2Euler(rd_.link_[Pelvis].rotm)(2));
-    global_to_base_trans_ = rd_.link_[Pelvis].xpos;
-
-    base_to_head_transform_.linear() = global_to_base_rot_yaw_only_.transpose() * rd_.link_[Head].rotm;
-    base_to_head_transform_.translation() = global_to_base_rot_yaw_only_.transpose() * (rd_.link_[Head].xpos - rd_.link_[Pelvis].xpos);
-}
-
-//________________________________________________________________________________________________//
