@@ -1,0 +1,5 @@
+# Kalman filter parameters for obstacle state(pos & vel) estimation
+tracking_duration: 2.0
+process_variance: 0.01
+process_rate_variance: 0.1
+measurement_variance: 1

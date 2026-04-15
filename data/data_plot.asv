@@ -1,0 +1,75 @@
+%%
+
+clc
+clear all
+close all
+
+data = readmatrix('torque_sum_log.txt');
+torque_sol = data(:, 1:33);
+
+data = readmatrix('torque_idn_log.txt');
+torque_id = data(:, 1:33);
+
+% 
+data = readmatrix('torque_pd_log.txt');
+torque_pd = data(:, 1:33);
+
+for torque_cnt = 1:1:6
+    figure()
+    sgtitle('JOINT TORQUE')
+    % torque_cnt = 2
+    plot(torque_sol(:,torque_cnt))    
+    hold on 
+    plot(torque_id(:,torque_cnt))
+    plot(torque_pd(:,torque_cnt))
+    legend()
+end
+%%
+
+clc
+clear all
+close all
+
+cp = readmatrix('cp_log.txt');
+zmp = readmatrix('zmp_log.txt');
+com = readmatrix('com_log.txt');
+lfoot = readmatrix('left_foot_log.txt');
+rfoot = readmatrix('left_foot_log.txt');
+
+figure()
+sgtitle('X')
+plot(cp(:,1))    
+hold on 
+plot(zmp(:,1))
+plot(zmp(:,1))
+plot(torque_id(:,torque_cnt))
+plot(torque_pd(:,torque_cnt))
+legend()
+
+%%
+close all
+
+main = readmatrix('main_computation_time_log.txt');
+main_dt = main(:, 1);
+wbc = readmatrix('wbc_computation_time_log.txt');
+wbc_dt = main(:, 1);
+
+main_dt_us = main(:,1);        % [microsecond]
+wbc_dt_us = wbc(:,1);          % [microsecond]
+
+% us -> sec
+main_dt = main_dt_us * 1e-6;
+wbc_dt  = wbc_dt_us  * 1e-6;
+
+% Hz
+main_hz = 1 ./ main_dt;
+wbc_hz  = 1 ./ wbc_dt;
+
+figure()
+plot(main_hz)
+hold on
+plot(wbc_hz)
+legend('Main Hz', 'WBC Hz')
+ylabel('Frequency (Hz)')
+xlabel('Sample')
+grid on
